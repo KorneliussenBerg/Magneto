@@ -1,0 +1,2 @@
+# Magneto
+Smarte Systemer Sjakkrobot
