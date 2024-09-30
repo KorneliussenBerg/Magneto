@@ -1,0 +1,69 @@
+#husk å laste ned chess i anaconda prompt
+#must download chess in anaconda prompt :DD
+
+
+import chess
+import chess.engine
+
+STOCKFISH_PATH = "C:/Users/krith/Downloads/stockfish-windows-x86-64-avx2/stockfish/stockfish.exe"
+
+# Initialize  / connect engine
+board = chess.Board()
+engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+
+
+print("Initial board:")
+print(board)
+
+# Human has first move
+
+while not board.is_game_over():
+
+    
+    
+    human_move = input("Your chess move?: ")
+    
+    try:
+        
+        board.push_uci(human_move)
+    except ValueError:
+        # Handle invalid moves
+        print("Invalid move, try again.")
+        continue
+
+    # Display the board after the human player's move
+    print("\nBoard after your move:")
+    print(board)
+
+    if board.is_game_over():
+        break
+
+    # 2 seconds thinking time + pushing the move
+    result = engine.play(board, chess.engine.Limit(time=2.0))
+    
+    board.push(result.move)
+
+
+    print("\nBoard after Stockfish's move:")
+    print(board)
+    
+    print(" \n Sending this move to machine ")
+    print(result.move)
+    
+    
+# If the game ends, print the result
+print("\nGame over.")
+if board.is_checkmate():
+    print("Checkmate!")
+elif board.is_stalemate():
+    print("Stalemate!")
+elif board.is_insufficient_material():
+    print("Insufficient material!")
+elif board.is_seventyfive_moves():
+    print("Draw by 75-move rule!")
+elif board.is_fivefold_repetition():
+    print("Draw by fivefold repetition!")
+elif board.is_variant_draw():
+    print("Draw by variant rule!")
+
+engine.quit()
