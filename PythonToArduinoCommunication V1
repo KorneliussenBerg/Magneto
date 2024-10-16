@@ -1,0 +1,150 @@
+//finker ikke foreløpig
+
+#include <AccelStepper.h>
+
+
+#define xdirPin 11          //  1-8 on the board
+#define xstepPin 12
+
+#define motorInterfaceType 1
+AccelStepper xstepper(motorInterfaceType, xstepPin, xdirPin);
+
+
+
+
+//functions
+
+void recieveStockfishMove(){
+ volatile bool moveReceived = false;
+  String stockfishMove;
+
+  while (!moveReceived){
+  //if(!moveReceived) {            //note to self, if gjør at move 2 og 3 kommer i feil rekkefølge, while riktig med sender ikke siste
+        
+              
+    if (Serial.available() > 0) {
+
+      String stockfishMove = Serial.readStringUntil('\n');
+
+       if(stockfishMove.length() != 0){
+
+          moveReceived = true;
+      
+          startMotor(stockfishMove);       
+    
+        } 
+    } 
+  }
+}
+
+
+void startMotor(String position){                       //WILL BE ALTERED TO INPUT THE NEXT MOVE FROM STOCKFISH
+ volatile bool motorFinished = false;
+  xstepper.setMaxSpeed(1000);    // Max speed in steps per second
+  xstepper.setAcceleration(500); // Acceleration in steps per second^2
+
+  while(!motorFinished){
+
+    if(position.length() != 0){           //STRING WILL PROBABLY BE A POSITION IN AN ARRAY. if stockfish sends h2h3 this will be a set position for the motor
+    
+      xstepper.moveTo(2000);
+      xstepper.run();
+
+      if(xstepper.distanceToGo() == 0){  
+        motorFinished = true;
+        readSensors1();
+
+        
+    }
+  }
+  else {
+  break;
+  }
+}
+        
+}
+
+
+void sendHumanMove(String humanMove) {
+ volatile bool moveSent = false;//only sending once, therefore sent check
+
+  if(!moveSent){
+    Serial.println(humanMove); //will send the human move, the string will be created from sensors activating/deactivating
+    //delay(2000); // SKAL PÅ IGJEN
+    recieveStockfishMove();
+
+    moveSent = true;
+} 
+}
+
+
+void readSensors(){
+//check sensors and create a string with move:
+//simulate a found move ---->
+//ex.  humanMoveMade = e7e5 
+//probably a while loop
+
+//while 
+String humanMoveMade = "a2a3";
+sendHumanMove(humanMoveMade);
+
+}
+
+void readSensors1(){
+//check sensors and create a string with move:
+//simulate a found move ---->
+//ex.  humanMoveMade = e7e5 
+//probably a while loop
+
+//while 
+String humanMoveMade = "f2f3";
+sendHumanMove(humanMoveMade);
+}
+
+
+void setup() {
+
+  Serial.begin(9600);
+  xstepper.setMaxSpeed(1000);    // Max speed in steps per second
+  xstepper.setAcceleration(500); // Acceleration in steps per second^2
+  
+}
+
+void loop() {
+
+
+  readSensors();
+/*
+
+  String humanMove = "d2d3"; //using temporarily to check. will be sensor function or similar
+  sendHumanMove(humanMove);
+
+
+  
+  String humanMove2 = "b2b3"; //using temporarily to check. will be sensor function or similar
+  sendHumanMove(humanMove2);
+*/
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
