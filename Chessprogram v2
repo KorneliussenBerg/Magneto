@@ -1,0 +1,329 @@
+
+#include <AccelStepper.h>
+
+
+#define xdirPin 11          //  1-8 on the board         // bokstaver
+#define xstepPin 12
+
+#define ydirPin 7   // A-H on the chess board          //tall
+#define ystepPin 8
+
+
+#define zdirPin 4    // Lowering and lifting the pieces
+#define zstepPin 5
+
+#define motorInterfaceType 1
+AccelStepper xstepper(motorInterfaceType, xstepPin, xdirPin);
+AccelStepper ystepper(motorInterfaceType, ystepPin, ystepPin);
+AccelStepper zstepper(motorInterfaceType, ystepPin, ystepPin);
+
+
+ 
+//OTHER CONNECTIONS
+int electromagnetPin =  3;  // alter later
+
+
+
+//functions
+
+void recieveStockfishMove(){
+ volatile bool moveReceived = false;
+  String stockfishMove;
+
+  while (!moveReceived){
+  //if(!moveReceived) {            //note to self, if gjør at move 2 og 3 kommer i feil rekkefølge, while riktig med sender ikke siste
+        
+              
+    if (Serial.available() > 0) {
+
+      String stockfishMove = Serial.readStringUntil('\n');
+
+       if(stockfishMove.length() != 0 && stockfishMove.length() == 4){
+
+          String start = stockfishMove.substring(0,2);
+          String stop =  stockfishMove.substring(2,4);
+          moveReceived = true;
+      
+          calculateMove(start, stop);
+          //startMotor(stockfishMove);       
+          
+    
+        } 
+    } 
+  }
+}
+
+//  
+//CALCULATION 
+
+int characterToNumber(char character){
+  return character - 'a' +1;
+}
+
+void calculateMove(String start, String stop){
+  String CheckIfPieceOnStop;
+  CheckIfPieceOnStop = stop;
+  int homeX = 8;  // Example X-axis motor position for 'h'
+  int homeY = 8;  // Example Y-axis motor position for '8'
+
+// extracting the coulmn and numbers to understand have far the motors have to travel from home position. ex. 
+
+  char startCol = start.charAt(0); 
+  int startRow = start.charAt(1) - '0';
+
+  char stopCol = stop.charAt(0); 
+  int stopRow = stop.charAt(1) - '0';
+
+  int startX = characterToNumber(startCol);
+  int stopX = characterToNumber(stopCol);
+
+  int startY = startRow;
+  int stopY = stopRow;
+  // Calculate distance from home to start
+  int xToStart = startX - homeX;
+  int yToStart = startY - homeY;
+  
+  
+  // Calculate distance from home to stop
+  int xToStop = stopX - homeX;
+  int yToStop = stopY - homeY;
+
+  startMotor(xToStart, yToStart, xToStop, yToStop, CheckIfPieceOnStop);
+}
+
+
+
+
+
+
+
+
+void electromagnet(volatile bool state){ // call electromagnet(true) to turn on and electromagnet(off) to turn off.
+
+  if(state == true){
+    digitalWrite(electromagnetPin, HIGH); 
+      }
+    else {
+      digitalWrite(electromagnetPin, LOW);
+    }
+}
+
+
+
+
+void pickUp(){
+
+  zstepper.setMaxSpeed(1000);
+  zstepper.setAcceleration(500);
+  int distance = 3000;            // alter to be actual length needed to reach piece.
+
+  zstepper.moveTo(distance); 
+      zstepper.run();
+  
+  if(zstepper.distanceToGo() == 0){  
+      electromagnet(true);
+      //delay?? might not need it
+      zstepper.moveTo(-distance);
+      zstepper.run();
+}
+
+}
+void putDown(){
+
+  zstepper.setMaxSpeed(1000);
+  zstepper.setAcceleration(500);
+  int distance = 3000;            // alter to be actual length needed to reach piece.
+
+  zstepper.moveTo(distance); 
+      zstepper.run();
+  
+  if(zstepper.distanceToGo() == 0){  
+      electromagnet(false);
+      //delay?? might not need it
+      zstepper.moveTo(0);
+      zstepper.run();
+}
+
+}
+//test 2
+void startMotor(int xStart, int yStart, int xStop, int yStop, String CheckIfPieceOnStop) {                                          
+  volatile bool motorFinished = false;
+  int DistanceForEachBoard = 20000;  // Adjust for accurate board measurements
+  xStart = xStart * DistanceForEachBoard;
+  yStart = yStart * DistanceForEachBoard;
+  xStop = xStop * DistanceForEachBoard;
+  yStop = yStop * DistanceForEachBoard;
+
+  xstepper.setMaxSpeed(1000);    // Max speed in steps per second
+  xstepper.setAcceleration(500); // Acceleration in steps per second^2
+
+  ystepper.setMaxSpeed(1000);    // Max speed in steps per second
+  ystepper.setAcceleration(500); // Acceleration in steps per second^2
+
+  // Move to the start position
+  xstepper.moveTo(xStart);
+  ystepper.moveTo(yStart);
+
+  // Move both steppers until they reach the start position
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+  // Pick up the piece after reaching the start
+  pickUp();
+
+  // Move back to the home position (0, 0)
+  xstepper.moveTo(0);
+  ystepper.moveTo(0);
+
+  // Run both steppers back to home position
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+  // Move to the stop position (destination)
+  xstepper.moveTo(xStop);
+  ystepper.moveTo(yStop);
+
+  // Run both steppers until they reach the stop position
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+  // Put down the piece after reaching the stop position
+  putDown();
+
+  // Move back to the home position (0, 0) again
+  xstepper.moveTo(0);
+  ystepper.moveTo(0);
+
+  // Run both steppers back to home position
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+  // Once all movements are completed, read sensors again
+  motorFinished = true;
+  readSensors1();
+}
+
+
+
+void sendHumanMove(String humanMove) {
+ volatile bool moveSent = false;//only sending once, therefore sent check
+
+  if(!moveSent){
+    Serial.println(humanMove); //will send the human move, the string will be created from sensors activating/deactivating
+    //delay(2000); // SKAL PÅ IGJEN
+    
+    moveSent = true;
+    recieveStockfishMove();
+} 
+}
+
+
+void readSensors(){
+//check sensors and create a string with move:
+//simulate a found move ---->
+//ex.  humanMoveMade = e7e5 
+//probably a while loop
+
+//while 
+String humanMoveMade1 = "a2a3";
+sendHumanMove(humanMoveMade1);
+
+}
+
+void readSensors1(){
+//check sensors and create a string with move:
+//simulate a found move ---->
+//ex.  humanMoveMade = e7e5 
+//probably a while loop
+
+//while 
+String humanMoveMade2 = "f2f3";
+sendHumanMove(humanMoveMade2);
+}
+/*
+void readSensorsTest(Bool Start){
+volatile bool Start = false;
+
+while (!start){
+
+    
+ }
+
+//check sensors and create a string with move:
+//simulate a found move ---->
+//ex.  humanMoveMade = e7e5 
+//probably a while loop
+
+//while 
+String humanMoveMade = "a2a3";
+sendHumanMove(humanMoveMade);
+
+}
+*/
+
+
+void setup() {
+
+  Serial.begin(9600);
+  pinMode(electromagnetPin, OUTPUT);
+
+  xstepper.setMaxSpeed(1000);     // Max speed in steps per second
+  xstepper.setAcceleration(500); // Acceleration in steps per second^2
+
+  ystepper.setMaxSpeed(1000);   
+  ystepper.setAcceleration(500);
+  
+  zstepper.setMaxSpeed(1000);    
+  zstepper.setAcceleration(500); 
+  
+  
+}
+
+void loop() {
+
+
+  readSensors();
+/*
+
+  String humanMove = "d2d3"; //using temporarily to check. will be sensor function or similar
+  sendHumanMove(humanMove);
+
+
+  
+  String humanMove2 = "b2b3"; //using temporarily to check. will be sensor function or similar
+  sendHumanMove(humanMove2);
+*/
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
