@@ -1,0 +1,475 @@
+
+#include <AccelStepper.h>
+
+
+#define xdirPin 7          //  1-8 on the board         
+#define xstepPin 8
+
+#define ydirPin 11   // A-H on the chess board         
+#define ystepPin 12
+
+
+#define zdirPin 4    // Lowering and lifting the pieces
+#define zstepPin 5
+
+#define motorInterfaceType 1
+AccelStepper xstepper(motorInterfaceType, xstepPin, xdirPin);
+AccelStepper ystepper(motorInterfaceType, ystepPin, ydirPin);
+AccelStepper zstepper(motorInterfaceType, zstepPin, zdirPin);
+
+
+
+
+//OTHER CONNECTIONS
+int electromagnetPin =  3;  
+
+
+//////////////////////////////////////////////////////////////////////////
+//functions
+
+ void startGame(){ // functions like the start of the loop
+ String restartLoop = "restartLoop";
+ sendToMaster(restartLoop);
+ 
+ }
+
+
+
+
+void recieveStockfishMove(){
+ volatile bool moveReceived = false;
+  String stockfishMove;
+
+  while (!moveReceived){
+              
+        
+    if (Serial.available() > 0) {
+
+      String stockfishMove = Serial.readStringUntil('\n');
+
+       if(stockfishMove.length() != 0 || stockfishMove.length() == 4){
+
+          String start = stockfishMove.substring(0,2);
+          String stop =  stockfishMove.substring(2,4);
+          moveReceived = true;
+      
+          calculateMove(start, stop);
+          //startMotor(stockfishMove);       
+          
+    
+        } 
+    } 
+  }
+}
+
+//CALCULATION 
+
+int characterToNumber(char character){
+  return character - 'a' +1;
+}
+
+void calculateMove(String start, String stop){
+  String CheckIfPieceOnStop;
+  CheckIfPieceOnStop = stop;
+  int homeX = 8;  // Example X-axis motor position for 'h'
+  int homeY = 8;  // Example Y-axis motor position for '8'
+
+// extracting the coulmn and numbers to calculate the length
+
+  char startCol = start.charAt(0); 
+  int startRow = start.charAt(1) - '0';
+
+  char stopCol = stop.charAt(0); 
+  int stopRow = stop.charAt(1) - '0';
+
+  int startX = characterToNumber(startCol);
+  int stopX = characterToNumber(stopCol);
+
+  int startY = startRow;
+  int stopY = stopRow;
+
+  // Calculate distance from home to start
+  int xToStart = startX - homeX;
+  int yToStart = startY - homeY;
+  
+  
+  // Calculate distance from home to stop
+  int xToStop = stopX - homeX;
+  int yToStop = stopY - homeY;
+
+  startMotor(xToStart, yToStart, xToStop, yToStop, CheckIfPieceOnStop);
+}
+
+
+
+
+
+
+
+void electromagnet(volatile bool state){ // call electromagnet(true) to turn on and electromagnet(false) to turn off.
+
+  if(state == true){
+    digitalWrite(electromagnetPin, HIGH); 
+      }
+    else {
+      digitalWrite(electromagnetPin, LOW);
+    }
+}
+
+
+
+
+void pickUp(){
+
+  zstepper.setMaxSpeed(1000);
+  zstepper.setAcceleration(500);
+  int distance = 1900;           
+
+  zstepper.moveTo(distance); 
+
+  while(zstepper.distanceToGo() != 0){
+     zstepper.run();
+  }
+  
+  if (zstepper.distanceToGo() == 0){  
+      electromagnet(true);
+  }
+    zstepper.moveTo(0); 
+
+  while(zstepper.distanceToGo() != 0){
+     zstepper.run();
+  }
+
+}
+
+
+void putDown(){
+
+  zstepper.setMaxSpeed(1000);
+  zstepper.setAcceleration(500);
+  int distance = 1865;            
+
+  zstepper.moveTo(distance); 
+
+    while(zstepper.distanceToGo() != 0){
+     zstepper.run();
+    }
+  
+  if(zstepper.distanceToGo() == 0){  
+      electromagnet(false);
+      delay(1300);
+      
+  }
+
+      zstepper.moveTo(0);
+    
+  while(zstepper.distanceToGo() != 0){
+      zstepper.run();
+      
+}
+
+}
+
+bool pieceOnStop(String square) {
+  
+
+    // used to send the square we need for checking
+    
+    Serial1.println(square);
+
+    while(!Serial1.available()){
+      
+    }
+    String response = Serial1.readStringUntil('\n');
+    response.trim();
+    Serial.println(response);
+    if(response == "false"){
+       return false;
+    }
+    
+    else{
+      return true;
+
+
+    }
+
+
+}
+
+void startMotor(int xStart, int yStart, int xStop, int yStop, String CheckIfPieceOnStop) {                                          
+ 
+  volatile bool motorFinished = false;
+  int xDistanceForEachBoard = 1650;//1820;  // Adjust for accurate board measurements
+  int yDistanceForEachBoard = 1690; //2037 g: 1560;  // Adjust for accurate board measurements
+  xStart = xStart * xDistanceForEachBoard;
+  yStart = yStart * yDistanceForEachBoard;
+  xStop = xStop * xDistanceForEachBoard;
+  yStop = yStop * yDistanceForEachBoard;
+
+
+  //DISTANCE TO GO OFFBOARD
+  int outsideBoard = 14560;   //alter to correct
+
+
+  xstepper.setMaxSpeed(1000);    // Max speed in steps per second
+  xstepper.setAcceleration(500); // Acceleration in steps per second^2
+
+
+  ystepper.setMaxSpeed(1000);    
+  ystepper.setAcceleration(500); 
+
+  //////////////////////
+bool pieceOnStopTest = pieceOnStop(CheckIfPieceOnStop);
+//bool pieceOnStopTest = true;
+///////////////////////
+
+
+  if (!pieceOnStopTest){ 
+
+  
+
+    // Move to enemy piece
+  xstepper.moveTo(xStop);
+  ystepper.moveTo(yStop);
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  // Pick up enemy piece
+  pickUp();
+
+
+  // Move back to the home
+  xstepper.moveTo(0);  
+  ystepper.moveTo(0);
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  //Move outside of the board
+  ystepper.moveTo(-outsideBoard); // outside board
+  
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+  // Drop piece
+  electromagnet(false);
+
+
+  // Move back to the home
+  xstepper.moveTo(0);   //-xStart);
+  ystepper.moveTo(0); // -yStart);
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+
+
+  // Move to the start position
+  xstepper.moveTo(xStart);
+  ystepper.moveTo(yStart);
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  // Pick up the piece after reaching the start
+  pickUp();
+
+
+  //NEXT POSITION
+
+
+
+  // Move to the stop position (destination)
+  xstepper.moveTo(xStop);
+  ystepper.moveTo(yStop);
+
+
+  // Run both steppers 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  // Put down the piece
+  putDown();
+
+
+  // Move back to the home position
+
+
+  xstepper.moveTo(0);
+  ystepper.moveTo(0);
+
+
+  
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  // READ FOR INCOMING MOVE
+  motorFinished = true;
+  
+  startGame();
+  }
+
+
+  else { // if there is no piece on the destination square
+
+
+  // Move to the start position
+  xstepper.moveTo(xStart);
+  ystepper.moveTo(yStart);
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  // Pick up the piece after reaching the start
+  pickUp();
+
+
+  //NEXT POSITION
+
+
+  //int stop = xStop -xStart;
+
+
+  // Move to the stop position
+  xstepper.moveTo(xStop);
+  ystepper.moveTo(yStop);
+
+
+ 
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  // Put down the piece
+  putDown();
+
+
+  // Move back to the home position
+ 
+
+
+  xstepper.moveTo(0);
+  ystepper.moveTo(0);
+
+
+  // Run both steppers back to home position
+  while (xstepper.distanceToGo() != 0 || ystepper.distanceToGo() != 0) {
+    xstepper.run();
+    ystepper.run();
+  }
+
+
+  
+  motorFinished = true;
+  
+  startGame();
+ 
+}
+}
+
+
+void sendHumanMove(String humanMove) {
+ volatile bool moveSent = false;//only sending once, therefore sent check
+
+  if(!moveSent){
+    Serial.println(humanMove); //will send the human move, the string will be created from sensors activating/deactivating
+    //delay(2000); // SKAL PÅ IGJEN
+    
+    moveSent = true;
+    recieveStockfishMove();
+} 
+}
+
+
+void sendToMaster(String msg) {
+  //if (Serial.available() > 0) {
+   Serial.println("tring to send to master");
+    Serial1.println(msg);  // Send the move to the slave
+    Serial1.println("Move sent: " + msg);
+    receiveMessageFromMaster();
+
+    
+  
+}
+
+
+
+void setup() {
+
+  Serial.begin(9600);
+  Serial1.begin(9600);
+  pinMode(electromagnetPin, OUTPUT);
+
+  xstepper.setMaxSpeed(1000);     // Max speed in steps per second
+  xstepper.setAcceleration(500); // Acceleration in steps per second^2
+
+  ystepper.setMaxSpeed(1000);   
+  ystepper.setAcceleration(500);
+  
+  zstepper.setMaxSpeed(1000);    
+  zstepper.setAcceleration(500); 
+
+}
+
+void loop() {
+
+receiveMessageFromMaster();
+}
+
+//test
+
+void receiveMessageFromMaster(){
+while (true){
+  if (Serial1.available() > 0) {
+    
+
+        String humanMove = Serial1.readStringUntil('\n');
+        Serial1.println("Received move: " + humanMove);
+        sendHumanMove(humanMove);
+
+  }
+}
+
+}
+
+
+
+
