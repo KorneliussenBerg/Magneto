@@ -1,0 +1,124 @@
+import chess
+import chess.engine
+import time
+import serial.tools.list_ports
+
+
+STOCKFISH_PATH = "C:/Users/krith/Downloads/stockfish-windows-x86-64-avx2/stockfish/stockfish.exe"
+
+
+ports = serial.tools.list_ports.comports()
+serialInst = serial.Serial()
+
+
+portList = []
+
+
+for onePort in ports:
+    portList.append(str(onePort))
+    print(str(onePort))
+
+
+val = input("Select Port: COM")
+
+
+for x in range(0, len(portList)):
+    if portList[x].startswith("COM" + str(val)):
+        portVar = "COM" + str(val)
+        print(portList[x])
+
+
+serialInst.baudrate = 9600
+serialInst.port = portVar
+serialInst.open()
+
+
+# Initialize / connect engine
+board = chess.Board()
+engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
+
+
+print("Initial board:")
+print(board)
+
+
+# Human has first move
+while not board.is_game_over():
+
+
+    #reading the input from arduino sensors
+    if serialInst.in_waiting:
+        packet = serialInst.readline()
+        #print("Received this move by sensors: ", packet.decode('utf-8'), " <- Pushing this move to stockfish")
+        print("Received this move by sensors: ", packet.decode('utf-8'))
+       
+        #decoding the packet to be readable for human and for the pushing command
+        human_move = packet.decode('utf-8').strip() #use the strip() to remove data from the packet that we dont need, if there is any :D
+   
+        time.sleep(3)
+       
+
+
+        #time.sleep(20)
+        try:
+            board.push_uci(human_move)
+        except ValueError:
+           
+            # Handle invalid moves
+            continue
+
+
+        # Display the board after the human player's move
+        print("\nBoard after your move:")
+        print(board)
+
+
+
+
+        if board.is_game_over():
+            break
+
+
+        # 2 seconds thinking time + pushing the move
+        result = engine.play(board, chess.engine.Limit(time=2.0))
+        time.sleep(2)
+        board.push(result.move)
+
+
+        print("\nBoard after Stockfish's move:")
+        print(board)
+
+
+        #send the stockfish move back to arduino // the result.move
+
+
+        magnetoMessage = str(result.move)
+
+
+        serialInst.write(magnetoMessage.encode('utf-8'))
+
+
+
+
+        print("\nSending this move to arduino: ", magnetoMessage.strip())
+       
+
+
+# If the game ends, print the result
+print("\nGame over.")
+if board.is_checkmate():
+    print("Checkmate!")
+elif board.is_stalemate():
+    print("Stalemate!")
+elif board.is_insufficient_material():
+    print("Insufficient material!")
+elif board.is_seventyfive_moves():
+    print("Draw by 75-move rule!")
+elif board.is_fivefold_repetition():
+    print("Draw by fivefold repetition!")
+elif board.is_variant_draw():
+    print("Draw by variant rule!")
+
+
+engine.quit()
+serialInst.close()  # Close the serial connection after the game
