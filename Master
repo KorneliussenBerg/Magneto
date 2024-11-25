@@ -1,0 +1,160 @@
+struct SensorStruct {
+  String chess_Square;
+  int pin;
+  bool state;
+};
+
+
+
+//new
+SensorStruct sensorPins[] = {
+  {"a1", 2, true}, {"a2", 10, true}, {"a3", A12, true}, {"a4", 26, true},
+  {"a5", 34, true}, {"a6", 42, true}, {"a7", 50, true}, {"a8", A4, true},
+  {"b1", 3, true}, {"b2", 11, true}, {"b3", A13, true}, {"b4", 27, true},
+  {"b5", 35, true}, {"b6", 43, true}, {"b7", 51, true}, {"b8", A5, true},
+  {"c1", 4, true}, {"c2", 12, true}, {"c3", A15, true}, {"c4", 28, true},
+  {"c5", 36, true}, {"c6", 44, true}, {"c7", 52, true}, {"c8", A6, true},
+  {"d1", 5, true}, {"d2", 13, true}, {"d3", A14, true}, {"d4", 29, true},
+  {"d5", 37, true}, {"d6", 45, true}, {"d7", 53, true}, {"d8", A7, true},
+  {"e1", 6, true}, {"e2", 14, true}, {"e3", 22, true}, {"e4", 30, true},
+  {"e5", 38, true}, {"e6", 46, true}, {"e7", A0, true}, {"e8", A8, true},
+  {"f1", 7, true}, {"f2", 15, true}, {"f3", 23, true}, {"f4", 31, true},
+  {"f5", 39, true}, {"f6", 47, true}, {"f7", A1, true}, {"f8", A9, true},
+  {"g1", 8, true}, {"g2", 16, true}, {"g3", 24, true}, {"g4", 32, true},
+  {"g5", 40, true}, {"g6", 48, true}, {"g7", A2, true}, {"g8", A10, true},
+  {"h1", 9, true}, {"h2", 17, true}, {"h3", 25, true}, {"h4", 33, true},
+  {"h5", 41, true}, {"h6", 49, true}, {"h7", A3, true}, {"h8", A11, true}
+};
+
+const int buttonPin1 = 20; 
+const int buttonPin2 = 21; 
+
+
+void startGame() {  // functions like the start of the loop
+  volatile bool button = false;
+
+  Serial.println("Starting");
+  String fromSquare = checkMove();
+  Serial.println("from Square:"+fromSquare);
+
+  String toSquare = checkMove();
+  String move = fromSquare + toSquare;
+/*
+  while (true){
+    if (buttonPin1 == HIGH){
+      break;
+    }
+    else if(buttonPin2 == HIGH){
+      startGame();
+      break; // need it?
+    }
+
+  }
+*/
+  //send msg to slave
+  sendToSlave(move);
+  
+}
+
+// call function to update state of every sensor
+void updateSensors() {
+  for (auto& SensorStruct : sensorPins) {
+    SensorStruct.state = digitalRead(SensorStruct.pin);
+  }
+}
+
+
+String checkMove() {
+
+  // call updateSensors to make sure we know which Square has a piece on it before reading for a move
+  updateSensors();
+
+  while (true) {
+
+    for (auto& SensorStruct : sensorPins) {
+      bool currentState = digitalRead(SensorStruct.pin);
+
+      if (SensorStruct.state != currentState) {
+        SensorStruct.state = currentState;
+        return SensorStruct.chess_Square;
+      }
+    }
+  }
+}
+
+void sendToSlave(String move) {
+  //if (Serial.available() > 0) {
+    Serial1.println(move);  // Send the move to the slave
+    Serial.println("Move sent: " + move);
+
+    receiveFromSlave();
+  //}
+}
+
+
+  void receiveFromSlave() {
+    String msg;
+    Serial.println("Listening for messages...");
+
+    // listen while true
+    while (true) {
+        if (Serial1.available() > 0) {
+           
+            msg = Serial1.readStringUntil('\n');
+            msg.trim(); 
+
+            
+            if (msg.length() == 2) {
+                bool isPieceOnStop = pieceOnStop(msg);
+                if (isPieceOnStop) {
+                    Serial1.println("true");
+                } else {
+                    Serial1.println("false");
+                }
+                
+            }
+            // check for restartLoop
+            else if (msg == "restartLoop") {
+                Serial.println("Received restart command.");
+                startGame();
+                //
+            }
+        }
+    }
+}
+
+
+void setup() {
+  Serial.begin(9600);
+  Serial1.begin(9600);
+  pinMode(buttonPin1, INPUT);
+  pinMode(buttonPin2, INPUT);
+
+  for (auto& sensor : sensorPins) {
+    pinMode(sensor.pin, INPUT);
+    sensor.state = digitalRead(sensor.pin);  // Initialize to current state
+  }
+}
+
+
+
+bool pieceOnStop(String square) {
+  updateSensors();  // refresh data
+
+  for (auto& SensorStruct : sensorPins) {
+    bool currentState = digitalRead(SensorStruct.pin);  
+
+    if (square == SensorStruct.chess_Square) {
+      return currentState;  // return true if there is a piece on the square or return false if there isnt
+    }
+  }
+
+  // Hopefully never happens :)
+  return false;
+}
+
+
+
+void loop() {
+  startGame();
+}
